@@ -1,0 +1,38 @@
+# DreamBooth config. Fine-tunes the UNet (and optionally the text encoder)
+# with a prior-preservation loss on generic class samples.
+
+pretrained_model_name_or_path: "stable-diffusion-v1-5/stable-diffusion-v1-5"
+
+# Subject binding
+subject_identifier_phrase: "sks"         # rare identifier; bound to Pepper during training
+class_noun: "dog"                        # coarser class the prior should preserve
+
+# Data
+processed_images_directory: "data/processed"
+captions_file_path: "data/captions.json"
+class_prior_images_directory: "data/class_prior_dog"
+number_of_class_prior_images: 100        # auto-generated on first run if missing
+target_resolution: 512
+dataset_repeat_count: 1
+use_blip_captions_in_prompts: false      # set true to concat BLIP caption onto prompt
+
+# Output
+output_directory: "checkpoints/dreambooth"
+checkpoint_every_n_steps: 250
+
+# Optimization
+train_batch_size: 1                      # SD 1.5 DreamBooth fits in ~12 GB at bs=1, 512
+gradient_accumulation_steps: 4
+total_training_steps: 800
+learning_rate: 2.0e-6                    # low LR because full UNet is updated
+prior_loss_weight: 1.0
+max_gradient_norm: 1.0
+
+# What to unfreeze
+train_text_encoder: false                # set true for sharper identity at ~2x VRAM
+
+# Engine
+enable_gradient_checkpointing: true
+use_mixed_precision_float16: true
+num_workers: 0
+random_seed: 42

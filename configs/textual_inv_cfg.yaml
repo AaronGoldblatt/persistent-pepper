@@ -1,0 +1,29 @@
+# Textual Inversion config. Only the placeholder embedding is trained;
+# every other weight in SD 1.5 stays exactly as shipped.
+
+pretrained_model_name_or_path: "stable-diffusion-v1-5/stable-diffusion-v1-5"
+
+# Placeholder & init
+placeholder_token_string: "<pepper>"     # must tokenize to a brand-new token
+initializer_token_string: "dog"          # must tokenize to exactly one existing token
+
+# Data
+processed_images_directory: "data/processed"
+captions_file_path: "data/captions.json"
+target_resolution: 512
+dataset_repeat_count: 100                # Pepper photos are few; repeat per epoch
+
+# Output
+output_directory: "checkpoints/textual_inversion"
+checkpoint_every_n_steps: 500
+
+# Optimization
+train_batch_size: 4
+gradient_accumulation_steps: 1
+total_training_steps: 3000
+learning_rate: 5.0e-4                    # high LR because only 1 vector is trained
+
+# Engine
+use_mixed_precision_float16: true
+num_workers: 0
+random_seed: 42

@@ -1,0 +1,25 @@
+# Core numerical / deep learning stack
+torch>=2.2.0
+torchvision>=0.17.0
+numpy>=1.26.0
+Pillow>=10.2.0
+
+# Individual Stable Diffusion components (UNet / VAE / tokenizer / text encoder / scheduler).
+# We use these as building blocks only; we do NOT use the high-level StableDiffusionPipeline.
+diffusers>=0.27.0
+transformers>=4.38.0
+accelerate>=0.28.0
+safetensors>=0.4.2
+
+# Captioning backbone for the dataset (BLIP).
+# Loaded as raw HF model classes, not as a pipeline wrapper.
+ftfy>=6.1.1
+regex>=2023.12.25
+
+# Config / CLI / misc
+PyYAML>=6.0.1
+tqdm>=4.66.0
+
+# Notebook / visualization
+matplotlib>=3.8.0
+ipywidgets>=8.1.0

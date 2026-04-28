@@ -1,0 +1,153 @@
+"""
+CLIP-based evaluation metrics.
+
+Two numbers we care about, following the DreamBooth / Textual Inversion papers:
+
+- ``CLIP-I``: mean cosine similarity between CLIP image embeddings of the
+  generated images and of the real reference images of Pepper. This proxies
+  *identity preservation*.
+- ``CLIP-T``: mean cosine similarity between CLIP image embeddings of the
+  generated images and CLIP text embeddings of their prompts. This proxies
+  *prompt alignment*.
+
+We load raw `CLIPModel` / `CLIPProcessor` directly — no `pipeline(...)`.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Iterable, List, Optional, Sequence
+
+import torch
+import torch.nn.functional as F
+from PIL import Image
+from transformers import CLIPModel, CLIPProcessor
+
+
+DEFAULT_CLIP_MODEL_NAME = "openai/clip-vit-large-patch14"
+
+
+@dataclass
+class ClipSimilarityReport:
+    clip_image_to_image_similarity: float
+    clip_image_to_text_similarity: float
+    number_of_generated_images_considered: int
+    number_of_reference_images_considered: int
+
+
+def load_clip_evaluation_model(
+    clip_model_name: str = DEFAULT_CLIP_MODEL_NAME,
+    working_device: Optional[torch.device] = None,
+) -> tuple[CLIPModel, CLIPProcessor, torch.device]:
+    resolved_working_device = (
+        working_device
+        if working_device is not None
+        else torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    )
+    clip_model = CLIPModel.from_pretrained(clip_model_name).to(resolved_working_device)
+    clip_model.eval()
+    clip_processor = CLIPProcessor.from_pretrained(clip_model_name)
+    return clip_model, clip_processor, resolved_working_device
+
+
+@torch.no_grad()
+def embed_pil_images_with_clip(
+    clip_model: CLIPModel,
+    clip_processor: CLIPProcessor,
+    working_device: torch.device,
+    pil_images: Sequence[Image.Image],
+) -> torch.Tensor:
+    processor_inputs = clip_processor(
+        images=list(pil_images),
+        return_tensors="pt",
+    ).to(working_device)
+    image_embeddings = clip_model.get_image_features(**processor_inputs)
+    return F.normalize(image_embeddings, dim=-1)
+
+
+@torch.no_grad()
+def embed_text_prompts_with_clip(
+    clip_model: CLIPModel,
+    clip_processor: CLIPProcessor,
+    working_device: torch.device,
+    prompt_texts: Sequence[str],
+) -> torch.Tensor:
+    processor_inputs = clip_processor(
+        text=list(prompt_texts),
+        return_tensors="pt",
+        padding=True,
+        truncation=True,
+    ).to(working_device)
+    text_embeddings = clip_model.get_text_features(**processor_inputs)
+    return F.normalize(text_embeddings, dim=-1)
+
+
+def load_pil_images_from_directory(
+    images_directory: Path,
+) -> List[Image.Image]:
+    pil_images: List[Image.Image] = []
+    for image_path in sorted(images_directory.iterdir()):
+        if image_path.suffix.lower() in {".png", ".jpg", ".jpeg"}:
+            pil_images.append(Image.open(image_path).convert("RGB").copy())
+    return pil_images
+
+
+def compute_clip_similarity_report(
+    generated_pil_images: Sequence[Image.Image],
+    reference_pil_images: Sequence[Image.Image],
+    prompts_used_for_generation: Sequence[str],
+    clip_model_name: str = DEFAULT_CLIP_MODEL_NAME,
+) -> ClipSimilarityReport:
+    if len(generated_pil_images) != len(prompts_used_for_generation):
+        raise ValueError(
+            "Each generated image must be paired with the prompt that produced it."
+        )
+
+    clip_model, clip_processor, working_device = load_clip_evaluation_model(
+        clip_model_name=clip_model_name,
+    )
+
+    generated_image_embeddings = embed_pil_images_with_clip(
+        clip_model=clip_model,
+        clip_processor=clip_processor,
+        working_device=working_device,
+        pil_images=generated_pil_images,
+    )
+    reference_image_embeddings = embed_pil_images_with_clip(
+        clip_model=clip_model,
+        clip_processor=clip_processor,
+        working_device=working_device,
+        pil_images=reference_pil_images,
+    )
+    prompt_text_embeddings = embed_text_prompts_with_clip(
+        clip_model=clip_model,
+        clip_processor=clip_processor,
+        working_device=working_device,
+        prompt_texts=prompts_used_for_generation,
+    )
+
+    image_to_image_similarity_matrix = generated_image_embeddings @ reference_image_embeddings.T
+    mean_image_to_image_similarity = image_to_image_similarity_matrix.mean().item()
+
+    mean_image_to_text_similarity = (
+        (generated_image_embeddings * prompt_text_embeddings).sum(dim=-1).mean().item()
+    )
+
+    return ClipSimilarityReport(
+        clip_image_to_image_similarity=mean_image_to_image_similarity,
+        clip_image_to_text_similarity=mean_image_to_text_similarity,
+        number_of_generated_images_considered=len(generated_pil_images),
+        number_of_reference_images_considered=len(reference_pil_images),
+    )
+
+
+def format_report_as_human_readable_text(
+    report: ClipSimilarityReport,
+) -> str:
+    return (
+        f"CLIP-I (identity, gen vs refs):   {report.clip_image_to_image_similarity:.4f}\n"
+        f"CLIP-T (prompt alignment):        {report.clip_image_to_text_similarity:.4f}\n"
+        f"# generated images considered:    {report.number_of_generated_images_considered}\n"
+        f"# reference images considered:    {report.number_of_reference_images_considered}"
+    )
