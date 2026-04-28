@@ -79,12 +79,29 @@ def decode_latents_to_pil_images(
     stable_diffusion_components: StableDiffusionComponents,
     final_latents: torch.Tensor,
 ) -> List[Image.Image]:
-    unscaled_latents = final_latents / VAE_LATENT_SCALING_FACTOR
-    decoded_pixel_tensor = stable_diffusion_components.variational_autoencoder.decode(
-        unscaled_latents,
-    ).sample
+    vae_module = stable_diffusion_components.variational_autoencoder
+    original_vae_dtype = next(vae_module.parameters()).dtype
+
+    # SD's VAE is prone to fp16 overflow/NaNs; decode in fp32 for stability.
+    if original_vae_dtype != torch.float32:
+        vae_module.to(dtype=torch.float32)
+
+    unscaled_latents = (
+        final_latents.float() / VAE_LATENT_SCALING_FACTOR
+    )
+    decoded_pixel_tensor = vae_module.decode(unscaled_latents).sample
+    decoded_pixel_tensor = torch.nan_to_num(
+        decoded_pixel_tensor,
+        nan=0.0,
+        posinf=1.0,
+        neginf=-1.0,
+    )
     decoded_pixel_tensor = (decoded_pixel_tensor / 2 + 0.5).clamp(0, 1)
     decoded_pixel_tensor = decoded_pixel_tensor.cpu().permute(0, 2, 3, 1).float().numpy()
+
+    if original_vae_dtype != torch.float32:
+        vae_module.to(dtype=original_vae_dtype)
+
     rendered_pil_images: List[Image.Image] = []
     for single_image_array in decoded_pixel_tensor:
         rendered_pil_images.append(

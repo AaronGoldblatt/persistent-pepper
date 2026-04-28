@@ -47,6 +47,7 @@ from ..utils.sampling import (
     VAE_LATENT_SCALING_FACTOR,
     sample_images_from_prompts,
 )
+from ..utils.training_logs import append_training_metrics_to_csv
 
 
 @dataclass
@@ -88,8 +89,11 @@ def _encode_pixel_values_to_latents(
     variational_autoencoder,
     pixel_value_tensors: torch.Tensor,
 ) -> torch.Tensor:
+    vae_dtype = next(variational_autoencoder.parameters()).dtype
     with torch.no_grad():
-        encoded_latent_distribution = variational_autoencoder.encode(pixel_value_tensors).latent_dist
+        encoded_latent_distribution = variational_autoencoder.encode(
+            pixel_value_tensors.to(dtype=vae_dtype)
+        ).latent_dist
     return encoded_latent_distribution.sample() * VAE_LATENT_SCALING_FACTOR
 
 
@@ -138,6 +142,45 @@ def _populate_class_prior_directory_if_empty(
             generated_pil_image.save(output_path)
 
 
+def save_dreambooth_preview_image(
+    stable_diffusion_components,
+    preview_prompt_text: str,
+    preview_output_path: Path,
+    number_of_inference_steps: int,
+    classifier_free_guidance_scale: float,
+    random_seed: int,
+) -> None:
+    """Render one fixed prompt so DreamBooth progress is visible over time."""
+    preview_output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    text_encoder_was_training = stable_diffusion_components.text_encoder.training
+    denoising_unet_was_training = stable_diffusion_components.denoising_unet.training
+    variational_autoencoder_was_training = (
+        stable_diffusion_components.variational_autoencoder.training
+    )
+
+    stable_diffusion_components.text_encoder.eval()
+    stable_diffusion_components.denoising_unet.eval()
+    stable_diffusion_components.variational_autoencoder.eval()
+
+    generated_preview_image = sample_images_from_prompts(
+        stable_diffusion_components=stable_diffusion_components,
+        prompt_texts=[preview_prompt_text],
+        sampling_configuration=SamplingConfiguration(
+            number_of_inference_steps=number_of_inference_steps,
+            classifier_free_guidance_scale=classifier_free_guidance_scale,
+            random_seed=random_seed,
+        ),
+    )[0]
+    generated_preview_image.save(preview_output_path)
+
+    stable_diffusion_components.text_encoder.train(text_encoder_was_training)
+    stable_diffusion_components.denoising_unet.train(denoising_unet_was_training)
+    stable_diffusion_components.variational_autoencoder.train(
+        variational_autoencoder_was_training
+    )
+
+
 # --------------------------------------------------------------------------- #
 # Main entry point
 # --------------------------------------------------------------------------- #
@@ -167,6 +210,20 @@ def run_dreambooth_training(
         parsed_config.get("number_of_class_prior_images", 100)
     )
     checkpoint_every_n_steps: int = int(parsed_config.get("checkpoint_every_n_steps", 250))
+    log_every_n_steps: int = int(parsed_config.get("log_every_n_steps", 10))
+    preview_every_n_steps: int = int(
+        parsed_config.get("preview_every_n_steps", checkpoint_every_n_steps)
+    )
+    preview_prompt_template: str = str(
+        parsed_config.get("preview_prompt_template", "a photo of {subject}")
+    )
+    preview_num_inference_steps: int = int(
+        parsed_config.get("preview_num_inference_steps", 25)
+    )
+    preview_guidance_scale: float = float(
+        parsed_config.get("preview_guidance_scale", 7.5)
+    )
+    preview_seed: int = int(parsed_config.get("preview_seed", 0))
     max_gradient_norm: float = float(parsed_config.get("max_gradient_norm", 1.0))
     train_text_encoder: bool = bool(parsed_config.get("train_text_encoder", False))
     enable_gradient_checkpointing: bool = bool(
@@ -179,6 +236,11 @@ def run_dreambooth_training(
 
     torch.manual_seed(random_seed)
     output_directory.mkdir(parents=True, exist_ok=True)
+    metrics_csv_file_path = output_directory / "training_metrics.csv"
+    preview_images_directory = output_directory / "previews"
+    preview_prompt_text = preview_prompt_template.format(
+        subject=f"{subject_identifier_phrase} {class_noun}"
+    )
 
     working_dtype = (
         torch.float16 if use_mixed_precision_float16 and torch.cuda.is_available()
@@ -330,6 +392,14 @@ def run_dreambooth_training(
             total_diffusion_loss = (
                 subject_diffusion_loss + prior_loss_weight * class_prior_diffusion_loss
             )
+            if not torch.isfinite(total_diffusion_loss):
+                progress_bar.write(
+                    f"Skipping non-finite loss at step {current_global_step + 1}."
+                )
+                optimizer.zero_grad(set_to_none=True)
+                current_global_step += 1
+                progress_bar.update(1)
+                continue
 
             (total_diffusion_loss / gradient_accumulation_steps).backward()
 
@@ -348,6 +418,35 @@ def run_dreambooth_training(
                 prior=f"{class_prior_diffusion_loss.item():.4f}",
             )
 
+            should_log_this_step = (
+                log_every_n_steps > 0
+                and current_global_step % log_every_n_steps == 0
+            )
+            if should_log_this_step:
+                append_training_metrics_to_csv(
+                    csv_file_path=metrics_csv_file_path,
+                    fieldnames=[
+                        "step",
+                        "total_loss",
+                        "subject_loss",
+                        "prior_loss",
+                        "prior_loss_weight",
+                        "learning_rate",
+                        "batch_size",
+                        "preview_prompt",
+                    ],
+                    metric_row={
+                        "step": current_global_step,
+                        "total_loss": f"{total_diffusion_loss.item():.8f}",
+                        "subject_loss": f"{subject_diffusion_loss.item():.8f}",
+                        "prior_loss": f"{class_prior_diffusion_loss.item():.8f}",
+                        "prior_loss_weight": prior_loss_weight,
+                        "learning_rate": optimizer.param_groups[0]["lr"],
+                        "batch_size": subject_pixel_values.shape[0],
+                        "preview_prompt": preview_prompt_text,
+                    },
+                )
+
             if current_global_step % checkpoint_every_n_steps == 0:
                 intermediate_checkpoint_directory = (
                     output_directory / f"step_{current_global_step}"
@@ -360,6 +459,26 @@ def run_dreambooth_training(
                     stable_diffusion_components.text_encoder.save_pretrained(
                         intermediate_checkpoint_directory / "text_encoder",
                     )
+
+            should_save_preview_this_step = (
+                preview_every_n_steps > 0
+                and current_global_step % preview_every_n_steps == 0
+            )
+            if should_save_preview_this_step:
+                save_dreambooth_preview_image(
+                    stable_diffusion_components=stable_diffusion_components,
+                    preview_prompt_text=preview_prompt_text,
+                    preview_output_path=(
+                        preview_images_directory
+                        / f"preview_step_{current_global_step:06d}.png"
+                    ),
+                    number_of_inference_steps=preview_num_inference_steps,
+                    classifier_free_guidance_scale=preview_guidance_scale,
+                    random_seed=preview_seed,
+                )
+                stable_diffusion_components.denoising_unet.train()
+                if train_text_encoder:
+                    stable_diffusion_components.text_encoder.train()
 
             if current_global_step >= total_training_steps:
                 break

@@ -20,6 +20,14 @@ use_blip_captions_in_prompts: false      # set true to concat BLIP caption onto 
 output_directory: "checkpoints/dreambooth"
 checkpoint_every_n_steps: 250
 
+# Logging / previews
+log_every_n_steps: 10
+preview_every_n_steps: 250              # set to 0 to disable preview image generation
+preview_prompt_template: "a photo of {subject} sitting on a couch"
+preview_num_inference_steps: 25         # lower than final eval to keep training previews cheap
+preview_guidance_scale: 7.5
+preview_seed: 0
+
 # Optimization
 train_batch_size: 1                      # SD 1.5 DreamBooth fits in ~12 GB at bs=1, 512
 gradient_accumulation_steps: 4

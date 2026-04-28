@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable, List, Optional, Sequence
+from typing import List, Optional, Sequence
 
 import torch
 import torch.nn.functional as F
@@ -51,6 +51,58 @@ def load_clip_evaluation_model(
     return clip_model, clip_processor, resolved_working_device
 
 
+def extract_tensor_from_clip_output(
+    clip_output,
+    preferred_attribute_names: Sequence[str],
+) -> torch.Tensor:
+    """
+    Transformers versions differ on whether CLIP helpers return a Tensor or a
+    model-output object. Normalize those variants here.
+    """
+    if isinstance(clip_output, torch.Tensor):
+        return clip_output[:, 0, :] if clip_output.ndim == 3 else clip_output
+    for attribute_name in preferred_attribute_names:
+        candidate_tensor = getattr(clip_output, attribute_name, None)
+        if isinstance(candidate_tensor, torch.Tensor):
+            return candidate_tensor[:, 0, :] if candidate_tensor.ndim == 3 else candidate_tensor
+    if isinstance(clip_output, tuple):
+        for candidate_tensor in clip_output:
+            if isinstance(candidate_tensor, torch.Tensor):
+                return candidate_tensor[:, 0, :] if candidate_tensor.ndim == 3 else candidate_tensor
+    raise TypeError(
+        "Could not extract a tensor from CLIP output of type "
+        f"{type(clip_output)!r}."
+    )
+
+
+def project_clip_pooler_output_if_needed(
+    clip_model: CLIPModel,
+    clip_output,
+    projection_attribute_name: str,
+) -> torch.Tensor:
+    """Fallback for versions where get_*_features returns a model output."""
+    if isinstance(clip_output, torch.Tensor):
+        return clip_output
+
+    for projected_attribute_name in ["image_embeds", "text_embeds"]:
+        projected_tensor = getattr(clip_output, projected_attribute_name, None)
+        if isinstance(projected_tensor, torch.Tensor):
+            return (
+                projected_tensor[:, 0, :]
+                if projected_tensor.ndim == 3
+                else projected_tensor
+            )
+
+    pooled_hidden_state = extract_tensor_from_clip_output(
+        clip_output=clip_output,
+        preferred_attribute_names=["pooler_output"],
+    )
+    projection_layer = getattr(clip_model, projection_attribute_name, None)
+    if projection_layer is None:
+        return pooled_hidden_state
+    return projection_layer(pooled_hidden_state)
+
+
 @torch.no_grad()
 def embed_pil_images_with_clip(
     clip_model: CLIPModel,
@@ -62,7 +114,12 @@ def embed_pil_images_with_clip(
         images=list(pil_images),
         return_tensors="pt",
     ).to(working_device)
-    image_embeddings = clip_model.get_image_features(**processor_inputs)
+    image_output = clip_model.get_image_features(**processor_inputs)
+    image_embeddings = project_clip_pooler_output_if_needed(
+        clip_model=clip_model,
+        clip_output=image_output,
+        projection_attribute_name="visual_projection",
+    )
     return F.normalize(image_embeddings, dim=-1)
 
 
@@ -79,7 +136,12 @@ def embed_text_prompts_with_clip(
         padding=True,
         truncation=True,
     ).to(working_device)
-    text_embeddings = clip_model.get_text_features(**processor_inputs)
+    text_output = clip_model.get_text_features(**processor_inputs)
+    text_embeddings = project_clip_pooler_output_if_needed(
+        clip_model=clip_model,
+        clip_output=text_output,
+        projection_attribute_name="text_projection",
+    )
     return F.normalize(text_embeddings, dim=-1)
 
 

@@ -136,7 +136,9 @@ cells top-to-bottom. The notebook:
 1. Sanity-checks the allocated GPU.
 2. Mounts Drive and sets up a `persistent-pepper-cache/` folder for weights,
    processed images, captions, and checkpoints.
-3. Clones the repo into `/content/` and `pip install`s requirements.
+3. Reads a GitHub token from `MyDrive/cs5788/token.txt`, reads your GitHub
+   username from `MyDrive/cs5788/git_username.txt`, clones the private repo
+   into `/content/persistent-pepper`, and `pip install`s requirements.
 4. Downloads SD 1.5 into the Drive cache (one-time).
 5. Rsyncs raw photos from Drive to local SSD for fast reads.
 6. Preprocesses + captions the dataset, writing outputs to the Drive cache.
@@ -145,6 +147,16 @@ cells top-to-bottom. The notebook:
 8. Runs DreamBooth training the same way.
 9. Runs evaluation (manual DDIM sampler + CLIP-I / CLIP-T report).
 10. Previews generated images inline.
+
+During training, both methods also write lightweight progress artifacts into
+their `output_directory`:
+
+- `training_metrics.csv` records scalar losses every `log_every_n_steps`.
+  Textual Inversion logs the embedding-training diffusion loss; DreamBooth logs
+  total loss, subject loss, and class-prior loss separately.
+- `previews/preview_step_*.png` stores one fixed-seed sample every
+  `preview_every_n_steps`, using `preview_prompt_template`. Set
+  `preview_every_n_steps: 0` to disable previews if Colab time is tight.
 
 ### CLI equivalents (also work locally if you do have a CUDA GPU)
 

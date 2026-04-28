@@ -36,7 +36,8 @@ class StableDiffusionComponents:
 
     def move_to_device(self) -> "StableDiffusionComponents":
         self.text_encoder = self.text_encoder.to(self.working_device, dtype=self.working_dtype)
-        self.variational_autoencoder = self.variational_autoencoder.to(self.working_device, dtype=self.working_dtype)
+        # The SD 1.5 VAE is more stable in fp32, especially during decode.
+        self.variational_autoencoder = self.variational_autoencoder.to(self.working_device, dtype=torch.float32)
         self.denoising_unet = self.denoising_unet.to(self.working_device, dtype=self.working_dtype)
         return self
 

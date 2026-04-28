@@ -37,7 +37,12 @@ from ..utils.loss import (
     compute_epsilon_prediction_mse_loss,
     prepare_noised_latents_and_target,
 )
-from ..utils.sampling import VAE_LATENT_SCALING_FACTOR
+from ..utils.sampling import (
+    SamplingConfiguration,
+    VAE_LATENT_SCALING_FACTOR,
+    sample_images_from_prompts,
+)
+from ..utils.training_logs import append_training_metrics_to_csv
 
 
 @dataclass
@@ -82,8 +87,11 @@ def _encode_pixel_values_to_latents(
     variational_autoencoder,
     pixel_value_tensors: torch.Tensor,
 ) -> torch.Tensor:
+    vae_dtype = next(variational_autoencoder.parameters()).dtype
     with torch.no_grad():
-        encoded_latent_distribution = variational_autoencoder.encode(pixel_value_tensors).latent_dist
+        encoded_latent_distribution = variational_autoencoder.encode(
+            pixel_value_tensors.to(dtype=vae_dtype)
+        ).latent_dist
     return encoded_latent_distribution.sample() * VAE_LATENT_SCALING_FACTOR
 
 
@@ -100,6 +108,45 @@ def save_learned_embedding_to_disk(
     torch.save(
         {placeholder_token_string: learned_embedding_vector},
         output_file_path,
+    )
+
+
+def save_textual_inversion_preview_image(
+    stable_diffusion_components,
+    preview_prompt_text: str,
+    preview_output_path: Path,
+    number_of_inference_steps: int,
+    classifier_free_guidance_scale: float,
+    random_seed: int,
+) -> None:
+    """Render one fixed prompt so identity progress is visible over time."""
+    preview_output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    text_encoder_was_training = stable_diffusion_components.text_encoder.training
+    denoising_unet_was_training = stable_diffusion_components.denoising_unet.training
+    variational_autoencoder_was_training = (
+        stable_diffusion_components.variational_autoencoder.training
+    )
+
+    stable_diffusion_components.text_encoder.eval()
+    stable_diffusion_components.denoising_unet.eval()
+    stable_diffusion_components.variational_autoencoder.eval()
+
+    generated_preview_image = sample_images_from_prompts(
+        stable_diffusion_components=stable_diffusion_components,
+        prompt_texts=[preview_prompt_text],
+        sampling_configuration=SamplingConfiguration(
+            number_of_inference_steps=number_of_inference_steps,
+            classifier_free_guidance_scale=classifier_free_guidance_scale,
+            random_seed=random_seed,
+        ),
+    )[0]
+    generated_preview_image.save(preview_output_path)
+
+    stable_diffusion_components.text_encoder.train(text_encoder_was_training)
+    stable_diffusion_components.denoising_unet.train(denoising_unet_was_training)
+    stable_diffusion_components.variational_autoencoder.train(
+        variational_autoencoder_was_training
     )
 
 
@@ -122,6 +169,21 @@ def run_textual_inversion_training(
         parsed_config.get("gradient_accumulation_steps", 1)
     )
     checkpoint_every_n_steps: int = int(parsed_config.get("checkpoint_every_n_steps", 250))
+    log_every_n_steps: int = int(parsed_config.get("log_every_n_steps", 10))
+    preview_every_n_steps: int = int(
+        parsed_config.get("preview_every_n_steps", checkpoint_every_n_steps)
+    )
+    preview_prompt_template: str = str(
+        parsed_config.get("preview_prompt_template", "a photo of {subject}")
+    )
+    preview_num_inference_steps: int = int(
+        parsed_config.get("preview_num_inference_steps", 25)
+    )
+    preview_guidance_scale: float = float(
+        parsed_config.get("preview_guidance_scale", 7.5)
+    )
+    preview_seed: int = int(parsed_config.get("preview_seed", 0))
+    max_gradient_norm: float = float(parsed_config.get("max_gradient_norm", 1.0))
     use_mixed_precision_float16: bool = bool(
         parsed_config.get("use_mixed_precision_float16", True)
     )
@@ -130,6 +192,11 @@ def run_textual_inversion_training(
     torch.manual_seed(random_seed)
 
     output_directory.mkdir(parents=True, exist_ok=True)
+    metrics_csv_file_path = output_directory / "training_metrics.csv"
+    preview_images_directory = output_directory / "previews"
+    preview_prompt_text = preview_prompt_template.format(
+        subject=placeholder_token_string
+    )
 
     working_dtype = (
         torch.float16 if use_mixed_precision_float16 and torch.cuda.is_available()
@@ -140,6 +207,7 @@ def run_textual_inversion_training(
         pretrained_model_name_or_path=pretrained_model_name_or_path,
         working_dtype=working_dtype,
     )
+    stable_diffusion_components.text_encoder.to(dtype=torch.float32)
 
     placeholder_token_info = inject_new_placeholder_token(
         tokenizer=stable_diffusion_components.tokenizer,
@@ -225,6 +293,15 @@ def run_textual_inversion_training(
                 predicted_noise=predicted_noise,
                 ground_truth_target=prediction_target,
             )
+            if not torch.isfinite(diffusion_loss_value):
+                progress_bar.write(
+                    f"Skipping non-finite loss at step {current_global_step + 1}."
+                )
+                optimizer.zero_grad(set_to_none=True)
+                current_global_step += 1
+                progress_bar.update(1)
+                continue
+
             (diffusion_loss_value / gradient_accumulation_steps).backward()
 
             if (current_global_step + 1) % gradient_accumulation_steps == 0:
@@ -237,12 +314,39 @@ def run_textual_inversion_training(
                     ),
                     placeholder_token_id=placeholder_token_info.placeholder_token_id,
                 )
+                torch.nn.utils.clip_grad_norm_(
+                    trainable_parameters,
+                    max_norm=max_gradient_norm,
+                )
                 optimizer.step()
                 optimizer.zero_grad(set_to_none=True)
 
             current_global_step += 1
             progress_bar.update(1)
             progress_bar.set_postfix(loss=f"{diffusion_loss_value.item():.4f}")
+
+            should_log_this_step = (
+                log_every_n_steps > 0
+                and current_global_step % log_every_n_steps == 0
+            )
+            if should_log_this_step:
+                append_training_metrics_to_csv(
+                    csv_file_path=metrics_csv_file_path,
+                    fieldnames=[
+                        "step",
+                        "loss",
+                        "learning_rate",
+                        "batch_size",
+                        "preview_prompt",
+                    ],
+                    metric_row={
+                        "step": current_global_step,
+                        "loss": f"{diffusion_loss_value.item():.8f}",
+                        "learning_rate": optimizer.param_groups[0]["lr"],
+                        "batch_size": pixel_value_tensors.shape[0],
+                        "preview_prompt": preview_prompt_text,
+                    },
+                )
 
             if current_global_step % checkpoint_every_n_steps == 0:
                 intermediate_checkpoint_path = (
@@ -254,6 +358,24 @@ def run_textual_inversion_training(
                     placeholder_token_id=placeholder_token_info.placeholder_token_id,
                     output_file_path=intermediate_checkpoint_path,
                 )
+
+            should_save_preview_this_step = (
+                preview_every_n_steps > 0
+                and current_global_step % preview_every_n_steps == 0
+            )
+            if should_save_preview_this_step:
+                save_textual_inversion_preview_image(
+                    stable_diffusion_components=stable_diffusion_components,
+                    preview_prompt_text=preview_prompt_text,
+                    preview_output_path=(
+                        preview_images_directory
+                        / f"preview_step_{current_global_step:06d}.png"
+                    ),
+                    number_of_inference_steps=preview_num_inference_steps,
+                    classifier_free_guidance_scale=preview_guidance_scale,
+                    random_seed=preview_seed,
+                )
+                stable_diffusion_components.text_encoder.train()
 
             if current_global_step >= total_training_steps:
                 break
