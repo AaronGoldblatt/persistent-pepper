@@ -263,7 +263,7 @@ def run_textual_inversion_training(
             clean_latents = _encode_pixel_values_to_latents(
                 variational_autoencoder=stable_diffusion_components.variational_autoencoder,
                 pixel_value_tensors=pixel_value_tensors,
-            )
+            ).to(dtype=working_dtype)
 
             (
                 noised_latents,
