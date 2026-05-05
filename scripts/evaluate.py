@@ -255,6 +255,11 @@ def main() -> None:
             parsed_arguments.output_directory / f"gen_{prompt_index:02d}.png"
         )
 
+    # Free SD model VRAM before loading CLIP to avoid OOM on constrained GPUs.
+    del stable_diffusion_components
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+
     reference_pil_images = load_pil_images_from_directory(
         parsed_arguments.reference_images_directory,
     )
