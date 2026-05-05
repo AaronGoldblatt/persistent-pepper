@@ -342,7 +342,7 @@ def run_dreambooth_training(
             concatenated_clean_latents = _encode_pixel_values_to_latents(
                 variational_autoencoder=stable_diffusion_components.variational_autoencoder,
                 pixel_value_tensors=concatenated_pixel_values,
-            )
+            ).to(dtype=working_dtype)
 
             (
                 concatenated_noised_latents,
