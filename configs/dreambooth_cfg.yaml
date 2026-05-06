@@ -28,19 +28,19 @@ preview_num_inference_steps: 25         # lower than final eval to keep training
 preview_guidance_scale: 7.5
 preview_seed: 0
 
-# Optimization
-train_batch_size: 1                      # SD 1.5 DreamBooth fits in ~12 GB at bs=1, 512
-gradient_accumulation_steps: 4
-total_training_steps: 800
+# Optimization  (tuned for A100 40 GB — ample VRAM, no memory compromises needed)
+train_batch_size: 2                      # A100 handles bs=2 easily; more stable gradients
+gradient_accumulation_steps: 1           # no accumulation needed at bs=2 on A100
+total_training_steps: 1200              # 1200 actual optimizer steps; matches paper recommendation
 learning_rate: 2.0e-6                    # low LR because full UNet is updated
-prior_loss_weight: 1.0
+prior_loss_weight: 0.5                   # was 1.0; reduced so subject signal dominates prior
 max_gradient_norm: 1.0
 
 # What to unfreeze
-train_text_encoder: false                # set true for sharper identity at ~2x VRAM
+train_text_encoder: true                 # A100 VRAM makes this free; sharpens identity binding
 
 # Engine
-enable_gradient_checkpointing: true
+enable_gradient_checkpointing: false     # not needed on A100; disabling speeds up training
 use_mixed_precision_float16: true
 num_workers: 0
 random_seed: 42

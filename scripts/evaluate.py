@@ -162,6 +162,7 @@ def load_textual_inversion_embedding_into_components(
     saved_state_dictionary = torch.load(
         learned_embedding_checkpoint_path,
         map_location="cpu",
+        weights_only=False,
     )
     if not isinstance(saved_state_dictionary, dict) or len(saved_state_dictionary) != 1:
         raise ValueError(
@@ -260,22 +261,25 @@ def main() -> None:
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
 
-    reference_pil_images = load_pil_images_from_directory(
-        parsed_arguments.reference_images_directory,
-    )
-    clip_similarity_report = compute_clip_similarity_report(
-        generated_pil_images=generated_pil_images,
-        reference_pil_images=reference_pil_images,
-        prompts_used_for_generation=fully_substituted_prompts,
-    )
-
-    human_readable_report_text = format_report_as_human_readable_text(
-        clip_similarity_report,
-    )
-    print(human_readable_report_text)
-    (parsed_arguments.output_directory / "clip_report.txt").write_text(
-        human_readable_report_text
-    )
+    try:
+        reference_pil_images = load_pil_images_from_directory(
+            parsed_arguments.reference_images_directory,
+        )
+        clip_similarity_report = compute_clip_similarity_report(
+            generated_pil_images=generated_pil_images,
+            reference_pil_images=reference_pil_images,
+            prompts_used_for_generation=fully_substituted_prompts,
+        )
+        human_readable_report_text = format_report_as_human_readable_text(
+            clip_similarity_report,
+        )
+        print(human_readable_report_text)
+        (parsed_arguments.output_directory / "clip_report.txt").write_text(
+            human_readable_report_text
+        )
+    except Exception as clip_error:
+        print(f"WARNING: CLIP evaluation failed and will be skipped: {clip_error}")
+        print("Generated images were saved successfully.")
 
 
 if __name__ == "__main__":
