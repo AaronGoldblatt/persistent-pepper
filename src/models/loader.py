@@ -40,6 +40,7 @@ class StableDiffusionComponents:
         self.text_encoder = self.text_encoder.to(self.working_device, dtype=torch.float32)
         self.variational_autoencoder = self.variational_autoencoder.to(self.working_device, dtype=torch.float32)
         self.denoising_unet = self.denoising_unet.to(self.working_device, dtype=torch.float32)
+        self.working_dtype = torch.float32
         return self
 
 
