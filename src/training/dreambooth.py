@@ -262,6 +262,11 @@ def run_dreambooth_training(
         target_resolution=target_resolution,
     )
 
+    # GradScaler requires fp32 parameters — autocast handles efficient fp16 compute.
+    stable_diffusion_components.denoising_unet.to(dtype=torch.float32)
+    if train_text_encoder:
+        stable_diffusion_components.text_encoder.to(dtype=torch.float32)
+
     trainable_parameters = configure_dreambooth_trainables(
         stable_diffusion_components=stable_diffusion_components,
         train_text_encoder=train_text_encoder,
