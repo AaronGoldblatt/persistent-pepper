@@ -15,11 +15,11 @@ dataset_repeat_count: 100                # Pepper photos are few; repeat per epo
 
 # Output
 output_directory: "checkpoints/textual_inversion"
-checkpoint_every_n_steps: 500
+checkpoint_every_n_steps: 1000
 
 # Logging / previews
 log_every_n_steps: 10
-preview_every_n_steps: 500              # set to 0 to disable preview image generation
+preview_every_n_steps: 1000             # set to 0 to disable preview image generation
 preview_prompt_template: "a photo of {subject} sitting on a couch"
 preview_num_inference_steps: 25         # lower than final eval to keep training previews cheap
 preview_guidance_scale: 7.5
@@ -28,7 +28,7 @@ preview_seed: 0
 # Optimization
 train_batch_size: 4
 gradient_accumulation_steps: 1
-total_training_steps: 3000
+total_training_steps: 5000
 learning_rate: 2.0e-4                    # embedding-only training; lower LR avoids NaNs
 max_gradient_norm: 1.0
 
