@@ -207,7 +207,6 @@ def run_textual_inversion_training(
         pretrained_model_name_or_path=pretrained_model_name_or_path,
         working_dtype=working_dtype,
     )
-    stable_diffusion_components.text_encoder.to(dtype=torch.float32)
 
     placeholder_token_info = inject_new_placeholder_token(
         tokenizer=stable_diffusion_components.tokenizer,
@@ -256,14 +255,11 @@ def run_textual_inversion_training(
 
     while current_global_step < total_training_steps:
         for training_batch in training_data_loader:
-            pixel_value_tensors = training_batch["pixel_value_tensors"].to(
-                working_device,
-                dtype=working_dtype,
-            )
+            pixel_value_tensors = training_batch["pixel_value_tensors"].to(working_device)
             clean_latents = _encode_pixel_values_to_latents(
                 variational_autoencoder=stable_diffusion_components.variational_autoencoder,
                 pixel_value_tensors=pixel_value_tensors,
-            ).to(dtype=working_dtype)
+            )
 
             (
                 noised_latents,
@@ -281,7 +277,7 @@ def run_textual_inversion_training(
             )
             text_encoder_hidden_states = stable_diffusion_components.text_encoder(
                 prompt_token_id_tensor,
-            ).last_hidden_state.to(dtype=working_dtype)
+            ).last_hidden_state
 
             predicted_noise = stable_diffusion_components.denoising_unet(
                 noised_latents,

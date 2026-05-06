@@ -20,7 +20,6 @@ prior images with the un-personalized base model via our manual DDIM sampler
 
 from __future__ import annotations
 
-import contextlib
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Iterator
@@ -159,7 +158,6 @@ def save_dreambooth_preview_image(
     variational_autoencoder_was_training = (
         stable_diffusion_components.variational_autoencoder.training
     )
-
     stable_diffusion_components.text_encoder.eval()
     stable_diffusion_components.denoising_unet.eval()
     stable_diffusion_components.variational_autoencoder.eval()
@@ -262,11 +260,6 @@ def run_dreambooth_training(
         target_resolution=target_resolution,
     )
 
-    # GradScaler requires fp32 parameters — autocast handles efficient fp16 compute.
-    stable_diffusion_components.denoising_unet.to(dtype=torch.float32)
-    if train_text_encoder:
-        stable_diffusion_components.text_encoder.to(dtype=torch.float32)
-
     trainable_parameters = configure_dreambooth_trainables(
         stable_diffusion_components=stable_diffusion_components,
         train_text_encoder=train_text_encoder,
@@ -278,14 +271,6 @@ def run_dreambooth_training(
         betas=(0.9, 0.999),
         weight_decay=1e-2,
         eps=1e-8,
-    )
-
-    use_amp = working_dtype == torch.float16 and torch.cuda.is_available()
-    grad_scaler = torch.amp.GradScaler("cuda", enabled=use_amp)
-    autocast_context = (
-        torch.autocast("cuda", dtype=torch.float16)
-        if use_amp
-        else contextlib.nullcontext()
     )
 
     prompt_builder_function = make_dreambooth_prompt_builder(
@@ -340,14 +325,8 @@ def run_dreambooth_training(
         for subject_training_batch in subject_training_data_loader:
             class_prior_batch = next(class_prior_batch_iterator)
 
-            subject_pixel_values = subject_training_batch["pixel_value_tensors"].to(
-                working_device,
-                dtype=working_dtype,
-            )
-            class_prior_pixel_values = class_prior_batch["pixel_value_tensors"].to(
-                working_device,
-                dtype=working_dtype,
-            )
+            subject_pixel_values = subject_training_batch["pixel_value_tensors"].to(working_device)
+            class_prior_pixel_values = class_prior_batch["pixel_value_tensors"].to(working_device)
 
             concatenated_pixel_values = torch.cat(
                 [subject_pixel_values, class_prior_pixel_values],
@@ -356,7 +335,7 @@ def run_dreambooth_training(
             concatenated_clean_latents = _encode_pixel_values_to_latents(
                 variational_autoencoder=stable_diffusion_components.variational_autoencoder,
                 pixel_value_tensors=concatenated_pixel_values,
-            ).to(dtype=working_dtype)
+            )
 
             (
                 concatenated_noised_latents,
@@ -376,37 +355,36 @@ def run_dreambooth_training(
                 prompt_texts=concatenated_prompt_texts,
                 target_device=working_device,
             )
-            with autocast_context:
-                text_encoder_hidden_states = stable_diffusion_components.text_encoder(
-                    prompt_token_id_tensor,
-                ).last_hidden_state
+            text_encoder_hidden_states = stable_diffusion_components.text_encoder(
+                prompt_token_id_tensor,
+            ).last_hidden_state
 
-                predicted_noise_concatenated = stable_diffusion_components.denoising_unet(
-                    concatenated_noised_latents,
-                    concatenated_sampled_timesteps,
-                    encoder_hidden_states=text_encoder_hidden_states,
-                ).sample
+            predicted_noise_concatenated = stable_diffusion_components.denoising_unet(
+                concatenated_noised_latents,
+                concatenated_sampled_timesteps,
+                encoder_hidden_states=text_encoder_hidden_states,
+            ).sample
 
-                (
-                    predicted_noise_subject_half,
-                    predicted_noise_class_half,
-                ) = predicted_noise_concatenated.chunk(2, dim=0)
-                (
-                    prediction_target_subject_half,
-                    prediction_target_class_half,
-                ) = concatenated_prediction_target.chunk(2, dim=0)
+            (
+                predicted_noise_subject_half,
+                predicted_noise_class_half,
+            ) = predicted_noise_concatenated.chunk(2, dim=0)
+            (
+                prediction_target_subject_half,
+                prediction_target_class_half,
+            ) = concatenated_prediction_target.chunk(2, dim=0)
 
-                subject_diffusion_loss = compute_epsilon_prediction_mse_loss(
-                    predicted_noise=predicted_noise_subject_half,
-                    ground_truth_target=prediction_target_subject_half,
-                )
-                class_prior_diffusion_loss = compute_epsilon_prediction_mse_loss(
-                    predicted_noise=predicted_noise_class_half,
-                    ground_truth_target=prediction_target_class_half,
-                )
-                total_diffusion_loss = (
-                    subject_diffusion_loss + prior_loss_weight * class_prior_diffusion_loss
-                )
+            subject_diffusion_loss = compute_epsilon_prediction_mse_loss(
+                predicted_noise=predicted_noise_subject_half,
+                ground_truth_target=prediction_target_subject_half,
+            )
+            class_prior_diffusion_loss = compute_epsilon_prediction_mse_loss(
+                predicted_noise=predicted_noise_class_half,
+                ground_truth_target=prediction_target_class_half,
+            )
+            total_diffusion_loss = (
+                subject_diffusion_loss + prior_loss_weight * class_prior_diffusion_loss
+            )
 
             if not torch.isfinite(total_diffusion_loss):
                 progress_bar.write(
@@ -417,16 +395,14 @@ def run_dreambooth_training(
                 progress_bar.update(1)
                 continue
 
-            grad_scaler.scale(total_diffusion_loss / gradient_accumulation_steps).backward()
+            (total_diffusion_loss / gradient_accumulation_steps).backward()
 
             if (current_global_step + 1) % gradient_accumulation_steps == 0:
-                grad_scaler.unscale_(optimizer)
                 torch.nn.utils.clip_grad_norm_(
                     trainable_parameters,
                     max_norm=max_gradient_norm,
                 )
-                grad_scaler.step(optimizer)
-                grad_scaler.update()
+                optimizer.step()
                 optimizer.zero_grad(set_to_none=True)
 
             current_global_step += 1

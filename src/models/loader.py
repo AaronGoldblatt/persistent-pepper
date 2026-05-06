@@ -35,10 +35,11 @@ class StableDiffusionComponents:
     working_dtype: torch.dtype
 
     def move_to_device(self) -> "StableDiffusionComponents":
-        self.text_encoder = self.text_encoder.to(self.working_device, dtype=self.working_dtype)
-        # The SD 1.5 VAE is more stable in fp32, especially during decode.
+        # Everything in fp32: avoids dtype mismatch bugs across training, sampling,
+        # and the GradScaler, at the cost of ~25% slower training on a T4.
+        self.text_encoder = self.text_encoder.to(self.working_device, dtype=torch.float32)
         self.variational_autoencoder = self.variational_autoencoder.to(self.working_device, dtype=torch.float32)
-        self.denoising_unet = self.denoising_unet.to(self.working_device, dtype=self.working_dtype)
+        self.denoising_unet = self.denoising_unet.to(self.working_device, dtype=torch.float32)
         return self
 
 
