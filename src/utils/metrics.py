@@ -114,13 +114,11 @@ def embed_pil_images_with_clip(
         images=list(pil_images),
         return_tensors="pt",
     ).to(working_device)
-    image_output = clip_model.get_image_features(**processor_inputs)
-    image_embeddings = project_clip_pooler_output_if_needed(
-        clip_model=clip_model,
-        clip_output=image_output,
-        projection_attribute_name="visual_projection",
+    # get_image_features returns (batch, projection_dim) tensor directly.
+    image_embeddings = clip_model.get_image_features(
+        pixel_values=processor_inputs["pixel_values"]
     )
-    return F.normalize(image_embeddings, dim=-1)
+    return F.normalize(image_embeddings.float(), dim=-1)
 
 
 @torch.no_grad()
@@ -136,13 +134,12 @@ def embed_text_prompts_with_clip(
         padding=True,
         truncation=True,
     ).to(working_device)
-    text_output = clip_model.get_text_features(**processor_inputs)
-    text_embeddings = project_clip_pooler_output_if_needed(
-        clip_model=clip_model,
-        clip_output=text_output,
-        projection_attribute_name="text_projection",
+    # get_text_features returns (batch, projection_dim) tensor directly.
+    text_embeddings = clip_model.get_text_features(
+        input_ids=processor_inputs["input_ids"],
+        attention_mask=processor_inputs.get("attention_mask"),
     )
-    return F.normalize(text_embeddings, dim=-1)
+    return F.normalize(text_embeddings.float(), dim=-1)
 
 
 def load_pil_images_from_directory(
