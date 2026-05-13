@@ -114,10 +114,12 @@ def embed_pil_images_with_clip(
         images=list(pil_images),
         return_tensors="pt",
     ).to(working_device)
-    # get_image_features returns (batch, projection_dim) tensor directly.
-    image_embeddings = clip_model.get_image_features(
+    # Go through vision_model directly to avoid output-wrapping differences
+    # across transformers versions, then apply the projection explicitly.
+    vision_outputs = clip_model.vision_model(
         pixel_values=processor_inputs["pixel_values"]
     )
+    image_embeddings = clip_model.visual_projection(vision_outputs.pooler_output)
     return F.normalize(image_embeddings.float(), dim=-1)
 
 
@@ -134,11 +136,11 @@ def embed_text_prompts_with_clip(
         padding=True,
         truncation=True,
     ).to(working_device)
-    # get_text_features returns (batch, projection_dim) tensor directly.
-    text_embeddings = clip_model.get_text_features(
+    text_outputs = clip_model.text_model(
         input_ids=processor_inputs["input_ids"],
         attention_mask=processor_inputs.get("attention_mask"),
     )
+    text_embeddings = clip_model.text_projection(text_outputs.pooler_output)
     return F.normalize(text_embeddings.float(), dim=-1)
 
 
