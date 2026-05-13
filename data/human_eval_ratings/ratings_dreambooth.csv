@@ -1,0 +1,25 @@
+image_id,prompt_number,prompt_text,seed,aaron_identity_fidelity,aaron_prompt_alignment,aaron_overall_quality,leah_identity_fidelity,leah_prompt_alignment,leah_overall_quality,judah_identity_fidelity,judah_prompt_alignment,judah_overall_quality,notes
+DB_p01_seed000,1,a photo of Pepper sitting on a couch,0,5,4,5,5,4,5,4,4,5,
+DB_p01_seed042,1,a photo of Pepper sitting on a couch,42,4,4,4,5,4,4,5,4,4,
+DB_p02_seed000,2,a close-up portrait of Pepper,0,5,4,4,5,4,4,5,4,4,
+DB_p02_seed042,2,a close-up portrait of Pepper,42,5,4,4,5,4,4,5,4,4,
+DB_p03_seed000,3,a photo of Pepper wearing sunglasses,0,4,4,4,4,4,4,5,4,4,
+DB_p03_seed042,3,a photo of Pepper wearing sunglasses,42,4,4,4,4,4,4,5,4,4,
+DB_p04_seed000,4,an oil painting of Pepper in the style of Van Gogh,0,4,4,4,4,4,5,4,4,4,
+DB_p04_seed042,4,an oil painting of Pepper in the style of Van Gogh,42,4,4,4,4,4,4,4,3,4,
+DB_p05_seed000,5,a photo of Pepper sitting on a wooden park bench,0,4,4,4,4,4,5,5,4,4,
+DB_p05_seed042,5,a photo of Pepper sitting on a wooden park bench,42,4,4,4,4,4,4,5,4,4,
+DB_p06_seed000,6,a photo of Pepper wearing a red wool sweater,0,4,4,4,4,4,4,4,4,4,
+DB_p06_seed042,6,a photo of Pepper wearing a red wool sweater,42,4,3,4,4,4,4,4,3,4,
+DB_p07_seed000,7,a photo of Pepper on the surface of the moon,0,4,3,4,4,3,4,4,3,4,looks like a black dog on the moon but Pepper's eyes are spot on
+DB_p07_seed042,7,a photo of Pepper on the surface of the moon,42,3,3,4,4,3,4,4,4,3,moon lighting is weird but you can still tell it's him
+DB_p08_seed000,8,a pencil sketch of Pepper,0,4,4,4,4,4,4,4,4,4,
+DB_p08_seed042,8,a pencil sketch of Pepper,42,3,4,4,4,4,4,4,4,3,
+DB_p09_seed000,9,a photo of Pepper swimming in a pool,0,4,3,4,4,3,4,4,2,4,
+DB_p09_seed042,9,a photo of Pepper swimming in a pool,42,4,3,3,3,3,3,4,3,4,
+DB_p10_seed000,10,a photo of Pepper as a character in a Studio Ghibli film,0,4,3,4,4,3,4,4,3,4,
+DB_p10_seed042,10,a photo of Pepper as a character in a Studio Ghibli film,42,3,3,4,3,3,4,4,3,4,
+DB_p11_seed000,11,a cyberpunk illustration of Pepper with neon lights,0,3,3,4,3,4,4,4,3,4,"cyberpunk style is cool, Pepper's curls still visible"
+DB_p11_seed042,11,a cyberpunk illustration of Pepper with neon lights,42,3,3,4,3,3,4,3,3,4,"very stylized, harder to tell it's specifically Pepper"
+DB_p12_seed000,12,a watercolor painting of Pepper in a field of flowers,0,4,4,4,4,4,4,4,3,4,
+DB_p12_seed042,12,a watercolor painting of Pepper in a field of flowers,42,4,3,4,4,4,4,4,3,4,
