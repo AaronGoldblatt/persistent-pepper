@@ -110,17 +110,18 @@ def embed_pil_images_with_clip(
     working_device: torch.device,
     pil_images: Sequence[Image.Image],
 ) -> torch.Tensor:
-    processor_inputs = clip_processor(
+    pixel_values = clip_processor(
         images=list(pil_images),
         return_tensors="pt",
-    ).to(working_device)
-    # Go through vision_model directly to avoid output-wrapping differences
-    # across transformers versions, then apply the projection explicitly.
-    vision_outputs = clip_model.vision_model(
-        pixel_values=processor_inputs["pixel_values"]
+    )["pixel_values"].to(working_device)
+    batch_size = pixel_values.shape[0]
+    # Use the full CLIPModel forward so we get the stable CLIPOutput.image_embeds
+    # field regardless of how the sub-model APIs behave in this transformers version.
+    dummy_input_ids = torch.zeros(
+        (batch_size, 2), dtype=torch.long, device=working_device
     )
-    image_embeddings = clip_model.visual_projection(vision_outputs.pooler_output)
-    return F.normalize(image_embeddings.float(), dim=-1)
+    clip_output = clip_model(pixel_values=pixel_values, input_ids=dummy_input_ids)
+    return F.normalize(clip_output.image_embeds.float(), dim=-1)
 
 
 @torch.no_grad()
@@ -130,18 +131,27 @@ def embed_text_prompts_with_clip(
     working_device: torch.device,
     prompt_texts: Sequence[str],
 ) -> torch.Tensor:
-    processor_inputs = clip_processor(
+    text_inputs = clip_processor(
         text=list(prompt_texts),
         return_tensors="pt",
         padding=True,
         truncation=True,
-    ).to(working_device)
-    text_outputs = clip_model.text_model(
-        input_ids=processor_inputs["input_ids"],
-        attention_mask=processor_inputs.get("attention_mask"),
     )
-    text_embeddings = clip_model.text_projection(text_outputs.pooler_output)
-    return F.normalize(text_embeddings.float(), dim=-1)
+    input_ids = text_inputs["input_ids"].to(working_device)
+    attention_mask = text_inputs.get("attention_mask")
+    if attention_mask is not None:
+        attention_mask = attention_mask.to(working_device)
+    batch_size = input_ids.shape[0]
+    image_size = clip_model.config.vision_config.image_size
+    dummy_pixel_values = torch.zeros(
+        (batch_size, 3, image_size, image_size), device=working_device
+    )
+    clip_output = clip_model(
+        pixel_values=dummy_pixel_values,
+        input_ids=input_ids,
+        attention_mask=attention_mask,
+    )
+    return F.normalize(clip_output.text_embeds.float(), dim=-1)
 
 
 def load_pil_images_from_directory(
