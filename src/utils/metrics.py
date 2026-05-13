@@ -51,58 +51,6 @@ def load_clip_evaluation_model(
     return clip_model, clip_processor, resolved_working_device
 
 
-def extract_tensor_from_clip_output(
-    clip_output,
-    preferred_attribute_names: Sequence[str],
-) -> torch.Tensor:
-    """
-    Transformers versions differ on whether CLIP helpers return a Tensor or a
-    model-output object. Normalize those variants here.
-    """
-    if isinstance(clip_output, torch.Tensor):
-        return clip_output[:, 0, :] if clip_output.ndim == 3 else clip_output
-    for attribute_name in preferred_attribute_names:
-        candidate_tensor = getattr(clip_output, attribute_name, None)
-        if isinstance(candidate_tensor, torch.Tensor):
-            return candidate_tensor[:, 0, :] if candidate_tensor.ndim == 3 else candidate_tensor
-    if isinstance(clip_output, tuple):
-        for candidate_tensor in clip_output:
-            if isinstance(candidate_tensor, torch.Tensor):
-                return candidate_tensor[:, 0, :] if candidate_tensor.ndim == 3 else candidate_tensor
-    raise TypeError(
-        "Could not extract a tensor from CLIP output of type "
-        f"{type(clip_output)!r}."
-    )
-
-
-def project_clip_pooler_output_if_needed(
-    clip_model: CLIPModel,
-    clip_output,
-    projection_attribute_name: str,
-) -> torch.Tensor:
-    """Fallback for versions where get_*_features returns a model output."""
-    if isinstance(clip_output, torch.Tensor):
-        return clip_output
-
-    for projected_attribute_name in ["image_embeds", "text_embeds"]:
-        projected_tensor = getattr(clip_output, projected_attribute_name, None)
-        if isinstance(projected_tensor, torch.Tensor):
-            return (
-                projected_tensor[:, 0, :]
-                if projected_tensor.ndim == 3
-                else projected_tensor
-            )
-
-    pooled_hidden_state = extract_tensor_from_clip_output(
-        clip_output=clip_output,
-        preferred_attribute_names=["pooler_output"],
-    )
-    projection_layer = getattr(clip_model, projection_attribute_name, None)
-    if projection_layer is None:
-        return pooled_hidden_state
-    return projection_layer(pooled_hidden_state)
-
-
 @torch.no_grad()
 def embed_pil_images_with_clip(
     clip_model: CLIPModel,
@@ -113,15 +61,18 @@ def embed_pil_images_with_clip(
     pixel_values = clip_processor(
         images=list(pil_images),
         return_tensors="pt",
-    )["pixel_values"].to(working_device)
-    batch_size = pixel_values.shape[0]
-    # Use the full CLIPModel forward so we get the stable CLIPOutput.image_embeds
-    # field regardless of how the sub-model APIs behave in this transformers version.
-    dummy_input_ids = torch.zeros(
-        (batch_size, 2), dtype=torch.long, device=working_device
+    )["pixel_values"].to(device=working_device, dtype=torch.float32)
+    # Call vision_model directly — avoids CLIPModel.forward() indexing bugs in
+    # some transformers versions where image_embeds ends up as a model-output
+    # object rather than a plain tensor.
+    vision_outputs = clip_model.vision_model(
+        pixel_values=pixel_values,
+        return_dict=True,
     )
-    clip_output = clip_model(pixel_values=pixel_values, input_ids=dummy_input_ids)
-    return F.normalize(clip_output.image_embeds.float(), dim=-1)
+    # pooler_output is always a plain tensor (output of an nn.Linear pooler)
+    pooler = vision_outputs.pooler_output.float()
+    image_embeds = clip_model.visual_projection(pooler)
+    return F.normalize(image_embeds, dim=-1)
 
 
 @torch.no_grad()
@@ -141,17 +92,15 @@ def embed_text_prompts_with_clip(
     attention_mask = text_inputs.get("attention_mask")
     if attention_mask is not None:
         attention_mask = attention_mask.to(working_device)
-    batch_size = input_ids.shape[0]
-    image_size = clip_model.config.vision_config.image_size
-    dummy_pixel_values = torch.zeros(
-        (batch_size, 3, image_size, image_size), device=working_device
-    )
-    clip_output = clip_model(
-        pixel_values=dummy_pixel_values,
+    # Call text_model directly for the same reason as vision_model above.
+    text_outputs = clip_model.text_model(
         input_ids=input_ids,
         attention_mask=attention_mask,
+        return_dict=True,
     )
-    return F.normalize(clip_output.text_embeds.float(), dim=-1)
+    pooler = text_outputs.pooler_output.float()
+    text_embeds = clip_model.text_projection(pooler)
+    return F.normalize(text_embeds, dim=-1)
 
 
 def load_pil_images_from_directory(
