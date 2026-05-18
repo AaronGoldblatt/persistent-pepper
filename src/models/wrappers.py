@@ -1,9 +1,7 @@
 """
-Freeze / unfreeze helpers and token-injection logic.
+Freeze /unfreeze helpers and token-injection logic.
 
-These are the only places where we touch ``requires_grad`` on the SD 1.5
-sub-modules — keeping it centralized makes it easy to audit which method
-is training which parameters.
+These are the only places where ``requires_grad`` is touched on the Stable Diffusion 1.5 sub-modules. Centralizing it makes it easy to audit which method is training which parameters.
 """
 
 from __future__ import annotations
@@ -17,12 +15,7 @@ from transformers import CLIPTextModel, CLIPTokenizer
 
 from .loader import StableDiffusionComponents
 
-
-# --------------------------------------------------------------------------- #
-# Generic freeze / unfreeze utilities
-# --------------------------------------------------------------------------- #
-
-
+# Generic freeze/unfreeze utilities
 def freeze_module_parameters(module_to_freeze: nn.Module) -> None:
     for parameter in module_to_freeze.parameters():
         parameter.requires_grad = False
@@ -35,11 +28,7 @@ def unfreeze_module_parameters(module_to_unfreeze: nn.Module) -> None:
     module_to_unfreeze.train()
 
 
-# --------------------------------------------------------------------------- #
 # Textual Inversion
-# --------------------------------------------------------------------------- #
-
-
 @dataclass
 class PlaceholderTokenInjectionResult:
     """Describes a newly injected placeholder token and its initialization."""
@@ -57,9 +46,7 @@ def inject_new_placeholder_token(
     initializer_token_string: str,
 ) -> PlaceholderTokenInjectionResult:
     """
-    Add a brand-new token (e.g. ``<pepper>``) to the tokenizer vocabulary and
-    seed its embedding with the embedding of an existing token
-    (e.g. ``"dog"``). This is the setup step for Textual Inversion.
+    Adds a brand-new token (e.g. ``<pepper>``) to the tokenizer vocabulary and seeds its embedding with the embedding of an existing semantically similar token (e.g. ``"dog"``).
     """
 
     number_of_newly_added_tokens = tokenizer.add_tokens([placeholder_token_string])
@@ -102,11 +89,10 @@ def configure_textual_inversion_trainables(
     placeholder_token_id: int,
 ) -> List[nn.Parameter]:
     """
-    Freeze *everything* except the input embedding matrix of the text encoder.
-    Gradients will still land on every row of that matrix — we zero out all
-    rows except the placeholder row inside the training step itself.
+    Freeze everything in Stable Diffusion 1.5 except the input embedding matrix of the text encoder.
+    Gradients will still land on every row of that matrix, but a mask is applied to zero out all rows except the placeholder row inside the training step itself.
 
-    Returns the list of parameters the optimizer should track.
+    Returns the list of parameters the optimizer should track for training.
     """
 
     freeze_module_parameters(stable_diffusion_components.variational_autoencoder)
@@ -117,16 +103,12 @@ def configure_textual_inversion_trainables(
     input_embedding_table.train()
     input_embedding_table.weight.requires_grad = True
 
-    _ = placeholder_token_id  # only needed downstream for the gradient mask
+    _ = placeholder_token_id  # only needed for the gradient mask
 
     return [input_embedding_table.weight]
 
 
-# --------------------------------------------------------------------------- #
 # DreamBooth
-# --------------------------------------------------------------------------- #
-
-
 def configure_dreambooth_trainables(
     stable_diffusion_components: StableDiffusionComponents,
     train_text_encoder: bool,

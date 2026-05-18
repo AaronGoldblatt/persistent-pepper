@@ -1,8 +1,8 @@
 """
-CLI wrapper around ``src.utils.captioning.generate_captions_for_directory``.
+CLI wrapper around ``src.utils.captioning.generate_captions_for_directory``
 
 Produces a ``captions.json`` mapping of
-``{processed_image_filename: blip_caption}``.
+``{processed_image_filename: blip_caption}``
 """
 
 from __future__ import annotations

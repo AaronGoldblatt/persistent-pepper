@@ -1,4 +1,4 @@
-"""Manual training loops for Textual Inversion and DreamBooth."""
+"""Manually implemented training loops for Textual Inversion and DreamBooth."""
 
 from .inversion import run_textual_inversion_training
 from .dreambooth import run_dreambooth_training

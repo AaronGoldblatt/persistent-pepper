@@ -1,9 +1,7 @@
 """
-Manual epsilon-prediction (a.k.a. v-prediction-optional) diffusion loss.
+Manual epsilon-prediction diffusion loss implementation.
 
-This is the *only* file that touches the noise scheduler's coefficients for
-training. We rely on the scheduler to store the schedule, but we do the
-forward-noising math ourselves so it's completely explicit.
+Relies on the scheduler to store the schedule, but does the forward-noising calculations explicitly.
 """
 
 from __future__ import annotations
@@ -38,8 +36,7 @@ def add_forward_noise_to_latents(
     """
     q(x_t | x_0) = sqrt(alpha_bar_t) * x_0 + sqrt(1 - alpha_bar_t) * noise
 
-    We pull the cumulative-alpha values off the scheduler but apply them by hand
-    so the forward process is auditable in this file.
+    Pull the cumulative-alpha values off the scheduler but apply them by hand so the forward process is fully explicit.
     """
 
     cumulative_alpha_values = noise_scheduler.alphas_cumprod.to(
@@ -59,8 +56,7 @@ def select_prediction_target(
     sampled_timesteps: torch.Tensor,
 ) -> torch.Tensor:
     """
-    SD 1.5 uses epsilon-prediction. We still support v-prediction here in case
-    someone swaps in a v-pred checkpoint.
+    Stable Diffusion 1.5 uses epsilon-prediction. I still support v-prediction here in case of a need to swap in a v-prediction checkpoint.
     """
 
     scheduler_prediction_type = getattr(
@@ -87,8 +83,7 @@ def compute_epsilon_prediction_mse_loss(
     per_sample_loss_weights: torch.Tensor | None = None,
 ) -> torch.Tensor:
     """
-    Per-sample MSE, optionally reweighted (useful for prior-preservation where
-    we want to blend subject loss and class prior loss).
+    Per-sample MSE, optionally reweighted (useful for prior-preservation where the aim is to blend subject loss and class prior loss).
     """
 
     if per_sample_loss_weights is None:
@@ -107,7 +102,7 @@ def prepare_noised_latents_and_target(
     noise_scheduler: DDPMScheduler,
     clean_latents: torch.Tensor,
 ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-    """Convenience helper: sample noise + timesteps, add noise, return target."""
+    """Convenience helper: sample noise + timesteps, add noise, and return the target."""
 
     gaussian_noise = torch.randn_like(clean_latents)
     sampled_timesteps = sample_random_timesteps(

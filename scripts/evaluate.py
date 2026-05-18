@@ -1,6 +1,6 @@
 """
-Evaluate a trained personalization (textual inversion or dreambooth) with the
-manual DDIM sampler + CLIP metrics.
+Evaluate a trained personalization (Textual Inversion or DreamBooth) with the
+manual DDIM sampler and the CLIP-based metrics (CLIP-I and CLIP-T)
 
     python scripts/evaluate.py \\
         --method dreambooth \\
@@ -147,8 +147,8 @@ def resolve_prompt_templates_from_arguments(
     prompts_file_path: Path,
 ) -> List[str]:
     """
-    Prefer explicitly provided --prompt values. Fall back to the prompts file
-    so the existing stress-test workflow keeps working unchanged.
+    Prefers explicitly provided --prompt values, falls back to the prompts file
+    so the existing stress-test workflow remains unchanged.
     """
     if command_line_prompt_templates:
         return command_line_prompt_templates
@@ -256,7 +256,7 @@ def main() -> None:
             parsed_arguments.output_directory / f"gen_{prompt_index:02d}.png"
         )
 
-    # Free SD model VRAM before loading CLIP to avoid OOM on constrained GPUs.
+    # Free Stable Diffusion model VRAM before loading CLIP to avoid Out of Memory (OOM) on constrained GPUs
     del stable_diffusion_components
     if torch.cuda.is_available():
         torch.cuda.empty_cache()

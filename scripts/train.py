@@ -1,6 +1,6 @@
 """
-Unified training entry point. Dispatches to the appropriate loop based on
-``--method``.
+Entry point for training for either method, routes to the appropriate training loop based on
+``--method``
 
     python scripts/train.py --method textual_inversion --config configs/textual_inv_cfg.yaml
     python scripts/train.py --method dreambooth        --config configs/dreambooth_cfg.yaml
@@ -28,7 +28,10 @@ from src.utils.config import (  # noqa: E402
 )
 
 
-SUPPORTED_METHODS = ("textual_inversion", "dreambooth")
+SUPPORTED_METHODS = (
+    "textual_inversion",
+    "dreambooth",
+)
 
 
 def parse_command_line_arguments() -> argparse.Namespace:
@@ -57,7 +60,7 @@ def parse_command_line_arguments() -> argparse.Namespace:
         default=[],
         metavar="KEY=VALUE",
         help=(
-            "Override a single YAML config field. Repeatable. "
+            "Override a single YAML config field. Repeatable (can be used multiple times in the command line to override multiple fields). "
             "Example: --override output_directory=/content/drive/MyDrive/pp/ckpts"
         ),
     )
@@ -79,7 +82,7 @@ def _resolve_pretrained_model_source(
 def _coerce_override_string_to_native_type(
     raw_string_value: str,
 ) -> Any:
-    """Best-effort type coercion so YAML numeric / bool types survive overrides."""
+    """Tries to coerce the string value to a native type so YAML numeric / bool types survive overrides."""
     lowered_value = raw_string_value.strip().lower()
     if lowered_value in {"true", "false"}:
         return lowered_value == "true"

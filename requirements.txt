@@ -4,15 +4,15 @@ torchvision>=0.17.0
 numpy>=1.26.0
 Pillow>=10.2.0
 
-# Individual Stable Diffusion components (UNet / VAE / tokenizer / text encoder / scheduler).
-# We use these as building blocks only; we do NOT use the high-level StableDiffusionPipeline.
+# Individual Stable Diffusion components (UNet / VAE / tokenizer / text encoder / scheduler)
+# Used as building blocks only, I do NOT use the high-level StableDiffusionPipeline
 diffusers>=0.27.0
 transformers>=4.38.0
 accelerate>=0.28.0
 safetensors>=0.4.2
 
-# Captioning backbone for the dataset (BLIP).
-# Loaded as raw HF model classes, not as a pipeline wrapper.
+# Captioning backbone for the dataset (BLIP)
+# Loaded as raw HF model classes, not as a pipeline wrapper
 ftfy>=6.1.1
 regex>=2023.12.25
 

@@ -1,16 +1,12 @@
 """
-CLIP-based evaluation metrics.
+CLIP-based evaluation metrics for both methods.
 
-Two numbers we care about, following the DreamBooth / Textual Inversion papers:
+Two types of metrics we care about, following the DreamBooth/Textual Inversion papers:
 
-- ``CLIP-I``: mean cosine similarity between CLIP image embeddings of the
-  generated images and of the real reference images of Pepper. This proxies
-  *identity preservation*.
-- ``CLIP-T``: mean cosine similarity between CLIP image embeddings of the
-  generated images and CLIP text embeddings of their prompts. This proxies
-  *prompt alignment*.
+- ``CLIP-I``: mean cosine similarity between CLIP image embeddings of the generated images and of the real reference images of Pepper. This serves as a proxy for identity preservation.
+- ``CLIP-T``: mean cosine similarity between CLIP image embeddings of the generated images and CLIP text embeddings of their prompts. This serves as a proxy for prompt alignment.
 
-We load raw `CLIPModel` / `CLIPProcessor` directly — no `pipeline(...)`.
+The raw `CLIPModel` and `CLIPProcessor` are loaded directly.
 """
 
 from __future__ import annotations
@@ -62,14 +58,12 @@ def embed_pil_images_with_clip(
         images=list(pil_images),
         return_tensors="pt",
     )["pixel_values"].to(device=working_device, dtype=torch.float32)
-    # Call vision_model directly — avoids CLIPModel.forward() indexing bugs in
-    # some transformers versions where image_embeds ends up as a model-output
-    # object rather than a plain tensor.
+    # Call vision_model directly — avoids issues where image_embeds ends up as a model-output object rather than a plain tensor
     vision_outputs = clip_model.vision_model(
         pixel_values=pixel_values,
         return_dict=True,
     )
-    # pooler_output is always a plain tensor (output of an nn.Linear pooler)
+    # pooler_output is always a plain tensor (the output of an nn.Linear pooler) since it's a nn.Module so I can call .float() on it
     pooler = vision_outputs.pooler_output.float()
     image_embeds = clip_model.visual_projection(pooler)
     return F.normalize(image_embeds, dim=-1)
@@ -92,7 +86,7 @@ def embed_text_prompts_with_clip(
     attention_mask = text_inputs.get("attention_mask")
     if attention_mask is not None:
         attention_mask = attention_mask.to(working_device)
-    # Call text_model directly for the same reason as vision_model above.
+    # Call text_model directly for the same reason as vision_model above
     text_outputs = clip_model.text_model(
         input_ids=input_ids,
         attention_mask=attention_mask,

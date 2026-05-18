@@ -1,8 +1,7 @@
 """
-Manual DDIM sampler — no `StableDiffusionPipeline` involvement.
+Manually implemented DDIM sampler.
 
 The core loop is:
-
     1. tokenize prompt (+ empty negative prompt) and encode with CLIPTextModel
     2. sample x_T ~ N(0, I) in latent space
     3. for t in reversed schedule:
@@ -11,9 +10,7 @@ The core loop is:
            x_{t-1} = DDIM update(x_t, eps, t)
     4. decode latents via the VAE
 
-We drive the DDIM update with a `DDIMScheduler` from `diffusers` because it
-just holds the alpha schedule; all prompt handling, CFG, and loop control
-lives here.
+The DDIM update is driven by a `DDIMScheduler` from `diffusers` because it holds the alpha schedule. All prompt handling, CFG, and loop control is handled here.
 """
 
 from __future__ import annotations
@@ -28,7 +25,7 @@ from PIL import Image
 from ..models.loader import StableDiffusionComponents
 
 
-VAE_LATENT_SCALING_FACTOR = 0.18215  # SD 1.5's pre-baked constant
+VAE_LATENT_SCALING_FACTOR = 0.18215  # Stable Diffusion 1.5's pre-baked constant
 
 
 @dataclass
@@ -82,7 +79,7 @@ def decode_latents_to_pil_images(
     vae_module = stable_diffusion_components.variational_autoencoder
     original_vae_dtype = next(vae_module.parameters()).dtype
 
-    # SD's VAE is prone to fp16 overflow/NaNs; decode in fp32 for stability.
+    # Stable Diffusion's VAE is prone to fp16 overflow/NaNs, so I decode in fp32 for stability
     if original_vae_dtype != torch.float32:
         vae_module.to(dtype=torch.float32)
 
@@ -96,8 +93,26 @@ def decode_latents_to_pil_images(
         posinf=1.0,
         neginf=-1.0,
     )
-    decoded_pixel_tensor = (decoded_pixel_tensor / 2 + 0.5).clamp(0, 1)
-    decoded_pixel_tensor = decoded_pixel_tensor.cpu().permute(0, 2, 3, 1).float().numpy()
+    decoded_pixel_tensor = (
+        (
+            decoded_pixel_tensor
+            / 2
+            + 0.5
+        )
+        .clamp(0, 1)
+    )
+    decoded_pixel_tensor = (
+        decoded_pixel_tensor
+        .cpu()
+        .permute(
+            0,
+            2,
+            3,
+            1,
+        )
+        .float()
+        .numpy()
+    )
 
     if original_vae_dtype != torch.float32:
         vae_module.to(dtype=original_vae_dtype)
@@ -105,7 +120,11 @@ def decode_latents_to_pil_images(
     rendered_pil_images: List[Image.Image] = []
     for single_image_array in decoded_pixel_tensor:
         rendered_pil_images.append(
-            Image.fromarray((single_image_array * 255).round().astype("uint8"))
+            Image.fromarray(
+                (single_image_array * 255)
+                .round()
+                .astype("uint8"),
+            )
         )
     return rendered_pil_images
 
@@ -117,7 +136,7 @@ def sample_images_from_prompts(
     sampling_configuration: SamplingConfiguration = SamplingConfiguration(),
 ) -> List[Image.Image]:
     """
-    Run the manual DDIM reverse-diffusion loop for a batch of prompts.
+    Runs the manual DDIM reverse-diffusion loop for a batch of prompts.
     Returns one PIL image per input prompt.
     """
 
@@ -164,7 +183,10 @@ def sample_images_from_prompts(
     current_latents = current_latents * ddim_sampler.init_noise_sigma
 
     for current_timestep in ddim_sampler.timesteps:
-        duplicated_latents_for_cfg = torch.cat([current_latents, current_latents], dim=0)
+        duplicated_latents_for_cfg = torch.cat(
+            [current_latents, current_latents],
+            dim=0,
+        )
         duplicated_latents_for_cfg = ddim_sampler.scale_model_input(
             duplicated_latents_for_cfg,
             current_timestep,

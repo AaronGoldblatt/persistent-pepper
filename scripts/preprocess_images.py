@@ -1,8 +1,8 @@
 """
-CLI wrapper around ``src.utils.preprocessing.preprocess_directory_of_images``.
+CLI wrapper around ``src.utils.preprocessing.preprocess_directory_of_images``
 
 Resizes every image in ``--raw_images_directory`` to a square of
-``--target_resolution``, writing PNGs into ``--processed_images_directory``.
+``--target_resolution``, writing PNGs into ``--processed_images_directory``
 """
 
 from __future__ import annotations

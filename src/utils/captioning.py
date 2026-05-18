@@ -1,8 +1,5 @@
 """
-BLIP-based caption generation for the Pepper dataset.
-
-We use the raw HF `BlipForConditionalGeneration` class directly — no
-`pipeline(...)` wrapper — and do our own batching and decoding.
+BLIP-based caption generation for the Pepper dataset using the raw HF `BlipForConditionalGeneration` class directly.
 """
 
 from __future__ import annotations
@@ -72,7 +69,7 @@ def generate_captions_for_directory(
     conditional_caption_prefix: Optional[str] = None,
 ) -> Dict[str, str]:
     """
-    Walk the processed-images directory, caption each file, and write the
+    Walks the processed-images directory, captions each file, and writes the
     ``{image_filename: caption}`` mapping as JSON.
     """
 

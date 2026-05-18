@@ -1,9 +1,9 @@
-# Textual Inversion config. Only the placeholder embedding is trained;
-# every other weight in SD 1.5 stays exactly as shipped.
+# Textual Inversion configuration file
+# Only the placeholder embedding is trained, every other weight in SD 1.5 stays exactly as shipped
 
 pretrained_model_name_or_path: "stable-diffusion-v1-5/stable-diffusion-v1-5"
 
-# Placeholder & init
+# Placeholder and initializer tokens
 placeholder_token_string: "<pepper>"     # must tokenize to a brand-new token
 initializer_token_string: "dog"          # must tokenize to exactly one existing token
 
@@ -11,7 +11,7 @@ initializer_token_string: "dog"          # must tokenize to exactly one existing
 processed_images_directory: "data/processed"
 captions_file_path: "data/captions.json"
 target_resolution: 512
-dataset_repeat_count: 100                # Pepper photos are few; repeat per epoch
+dataset_repeat_count: 100                # Very few Pepper photos (24 total), repeat per epoch
 
 # Output
 output_directory: "checkpoints/textual_inversion"
@@ -21,7 +21,7 @@ checkpoint_every_n_steps: 1000
 log_every_n_steps: 10
 preview_every_n_steps: 1000             # set to 0 to disable preview image generation
 preview_prompt_template: "a photo of {subject} sitting on a couch"
-preview_num_inference_steps: 25         # lower than final eval to keep training previews cheap
+preview_num_inference_steps: 25         # lower than final evaluation steps to keep training previews computationally cheap
 preview_guidance_scale: 7.5
 preview_seed: 0
 
@@ -29,7 +29,7 @@ preview_seed: 0
 train_batch_size: 4
 gradient_accumulation_steps: 1
 total_training_steps: 5000
-learning_rate: 2.0e-4                    # embedding-only training; lower LR avoids NaNs
+learning_rate: 2.0e-4                    # embedding-only training, lower LR avoids NaNs
 max_gradient_norm: 1.0
 
 # Engine

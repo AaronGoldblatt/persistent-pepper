@@ -1,4 +1,4 @@
-"""Model loading and freeze/unfreeze helpers for SD 1.5 sub-modules."""
+"""Model loading and freeze/unfreeze helpers for Stable Diffusion 1.5 sub-modules."""
 
 from .loader import (
     StableDiffusionComponents,

@@ -1,16 +1,11 @@
 """
-Manual Textual Inversion training loop.
+Manually implemented Textual Inversion training loop.
 
-Idea:
-    - Freeze everything in SD 1.5 except the input embedding matrix of the
-      text encoder.
-    - Add a new token (e.g. ``<pepper>``), seed it from an existing token
-      (e.g. ``dog``), and optimize *only its row* of the embedding matrix.
-    - Everything else — VAE, UNet, scheduler — is identical to training and we
-      don't touch its weights.
+    - Freezes everything in Stable Diffusion 1.5 except the input embedding matrix of the text encoder.
+    - Adds a new token (e.g. ``<pepper>``), seeds it from an existing semantically similar token (e.g. ``dog``), and optimizes only its row in the embedding matrix.
+    - Everything else (VAE, UNet, scheduler) is frozen and not touched during training.
 
-Only the placeholder row receives non-zero gradients; we enforce that
-explicitly in ``_zero_out_non_placeholder_embedding_gradients``.
+Only the placeholder row receives non-zero gradients; this is explicitly enforced in ``_zero_out_non_placeholder_embedding_gradients``.
 """
 
 from __future__ import annotations
@@ -58,8 +53,7 @@ def _zero_out_non_placeholder_embedding_gradients(
     placeholder_token_id: int,
 ) -> None:
     """
-    Mask gradients so only the placeholder row actually updates. Called
-    *after* backward() and *before* optimizer.step().
+    Masks gradients so only the placeholder row actually updates. Called after `backward()` and before `optimizer.step()`.
     """
     if input_embedding_weight_tensor.grad is None:
         return
@@ -101,7 +95,7 @@ def save_learned_embedding_to_disk(
     placeholder_token_id: int,
     output_file_path: Path,
 ) -> None:
-    """Saves just the single learned embedding vector (tiny file)."""
+    """Saves just the single learned embedding vector (small binary file, measuring only a few kilobytes)."""
     output_file_path.parent.mkdir(parents=True, exist_ok=True)
     input_embedding_table = text_encoder.get_input_embeddings().weight.detach().cpu()
     learned_embedding_vector = input_embedding_table[placeholder_token_id].clone()
@@ -119,7 +113,7 @@ def save_textual_inversion_preview_image(
     classifier_free_guidance_scale: float,
     random_seed: int,
 ) -> None:
-    """Render one fixed prompt so identity progress is visible over time."""
+    """Quickly renders one fixed prompt so identity progress is visible over time."""
     preview_output_path.parent.mkdir(parents=True, exist_ok=True)
 
     text_encoder_was_training = stable_diffusion_components.text_encoder.training

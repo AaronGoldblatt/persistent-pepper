@@ -1,7 +1,7 @@
 """
-Manual DreamBooth training loop with prior-preservation.
+Manually implemented DreamBooth training loop with prior-preservation.
 
-Per step we compute two losses and combine them:
+Per step, two losses are computed and combined:
 
     subject_loss  = MSE( UNet(x_subject_t, t, text_enc("a photo of sks dog")),
                          noise_subject )
@@ -9,13 +9,9 @@ Per step we compute two losses and combine them:
                          noise_class   )
     total_loss    = subject_loss + prior_loss_weight * prior_loss
 
-Subject and class samples share the *same* timestep-sampling / noising
-machinery and are concatenated into a single UNet call, following the
-original DreamBooth paper's efficient implementation.
+Subject and class samples share the same timestep-sampling/noising mechanisms and are concatenated into a single UNet call, following the original DreamBooth paper's efficient implementation.
 
-If ``class_prior_images_directory`` is empty, we first pre-generate class
-prior images with the un-personalized base model via our manual DDIM sampler
-(``src/utils/sampling.py``) — still no pipeline wrapper.
+If ``class_prior_images_directory`` is empty, class prior images are pre-generated with the untouched base model via my manually implemented DDIM sampler.
 """
 
 from __future__ import annotations
@@ -55,11 +51,6 @@ class DreamBoothTrainingOutcome:
     saved_unet_directory: Path
     saved_text_encoder_directory: Path | None
     number_of_training_steps_executed: int
-
-
-# --------------------------------------------------------------------------- #
-# Internal helpers
-# --------------------------------------------------------------------------- #
 
 
 def _infinite_iterator_over_data_loader(
@@ -178,11 +169,6 @@ def save_dreambooth_preview_image(
     stable_diffusion_components.variational_autoencoder.train(
         variational_autoencoder_was_training
     )
-
-
-# --------------------------------------------------------------------------- #
-# Main entry point
-# --------------------------------------------------------------------------- #
 
 
 def run_dreambooth_training(
@@ -383,7 +369,9 @@ def run_dreambooth_training(
                 ground_truth_target=prediction_target_class_half,
             )
             total_diffusion_loss = (
-                subject_diffusion_loss + prior_loss_weight * class_prior_diffusion_loss
+                subject_diffusion_loss
+                + prior_loss_weight
+                * class_prior_diffusion_loss
             )
 
             if not torch.isfinite(total_diffusion_loss):

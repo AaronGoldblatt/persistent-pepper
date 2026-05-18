@@ -1,9 +1,5 @@
 """
-Tiny YAML config loader.
-
-We intentionally keep this file free of any schema library — the configs are
-short enough that we'd rather have explicit validation in a couple of spots
-than pull in another dependency.
+Tiny YAML config loader with explicit validation.
 """
 
 from __future__ import annotations

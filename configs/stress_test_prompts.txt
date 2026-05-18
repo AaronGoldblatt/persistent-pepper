@@ -1,8 +1,7 @@
-# Standardized stress-test prompts for evaluation.
-# One prompt per line. Lines starting with '#' are ignored.
-# Use {subject} as a placeholder; scripts/evaluate.py substitutes it with either
-# the textual inversion placeholder (e.g. "<pepper>") or the DreamBooth phrase
-# (e.g. "sks dog").
+# Standardized stress-test prompts for evaluation
+# One prompt per line
+# Lines starting with '#' are ignored
+# Use {subject} as a placeholder, scripts/evaluate.py substitutes it with either the textual inversion placeholder (e.g. "<pepper>") or the DreamBooth phrase (e.g. "sks dog").
 
 a photo of {subject} sitting on a wooden park bench
 a photo of {subject} wearing a red wool sweater

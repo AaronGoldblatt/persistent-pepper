@@ -1,8 +1,8 @@
 """
-Image preprocessing: center-crop to a square then resize to the target resolution.
+Image preprocessing: center-crop to a square and then resize to the target resolution.
 
-Outputs are written as PNG so the training-time transform only has to
-``ToTensor`` and normalize; no further resizing.
+Outputs are written as PNGs so the training-time transform only has to do a
+``ToTensor`` and normalize transformation; no further resizing is needed.
 """
 
 from __future__ import annotations
@@ -13,7 +13,13 @@ from typing import List
 from PIL import Image, ImageOps
 
 
-SUPPORTED_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
+SUPPORTED_IMAGE_EXTENSIONS = {
+    ".jpg",
+    ".jpeg",
+    ".png",
+    ".webp",
+    ".bmp",
+}
 
 
 def list_image_files_in_directory(
@@ -32,8 +38,14 @@ def center_crop_to_square(
 ) -> Image.Image:
     image_width, image_height = input_image.size
     shorter_side_length = min(image_width, image_height)
-    left_pixel_offset = (image_width - shorter_side_length) // 2
-    top_pixel_offset = (image_height - shorter_side_length) // 2
+    left_pixel_offset = (
+        (image_width - shorter_side_length)
+        // 2
+    )
+    top_pixel_offset = (
+        (image_height - shorter_side_length)
+        // 2
+    )
     return input_image.crop(
         (
             left_pixel_offset,
@@ -50,7 +62,10 @@ def preprocess_single_image(
     target_resolution: int,
 ) -> None:
     with Image.open(source_image_path) as opened_image:
-        oriented_image = ImageOps.exif_transpose(opened_image).convert("RGB")
+        oriented_image = (
+            ImageOps.exif_transpose(opened_image)
+            .convert("RGB")
+        )
         cropped_square_image = center_crop_to_square(oriented_image)
         resized_image = cropped_square_image.resize(
             (target_resolution, target_resolution),
@@ -69,7 +84,8 @@ def preprocess_directory_of_images(
     written_destination_paths: List[Path] = []
     for source_image_path in source_image_paths:
         destination_image_path = (
-            processed_images_directory / f"{source_image_path.stem}.png"
+            processed_images_directory
+            / f"{source_image_path.stem}.png"
         )
         preprocess_single_image(
             source_image_path=source_image_path,

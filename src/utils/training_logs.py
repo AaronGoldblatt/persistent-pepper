@@ -1,4 +1,4 @@
-"""Small logging helpers for long-running Colab training jobs."""
+"""Small logging helpers for long-running Google Colab training jobs."""
 
 from __future__ import annotations
 

@@ -1,1 +1,1 @@
-"""Utility submodules: loss, metrics, sampling, preprocessing, captioning, config."""
+"""Utility submodules: loss, metrics, sampling, preprocessing, captioning, and configuration helpers."""

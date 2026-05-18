@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Quick trigger for training sessions.
+# Quick trigger script for training sessions
 #
 # Usage:
 #   scripts/run_train.sh textual_inversion
 #   scripts/run_train.sh dreambooth
 #
-# Point at a different YAML by exporting CONFIG_FILE=... before running.
+# Point at a different YAML by exporting CONFIG_FILE=... before running the script
 set -euo pipefail
 
 CHOSEN_METHOD="${1:-textual_inversion}"

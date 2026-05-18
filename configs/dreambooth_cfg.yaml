@@ -1,10 +1,11 @@
-# DreamBooth config. Fine-tunes the UNet (and optionally the text encoder)
-# with a prior-preservation loss on generic class samples.
+# DreamBooth configuration file
+# Fine-tunes the UNet (and optionally the text encoder) with a prior-preservation loss on generic class samples
+# After experimentation, I opted to fine-tune the text encoder as well
 
 pretrained_model_name_or_path: "stable-diffusion-v1-5/stable-diffusion-v1-5"
 
 # Subject binding
-subject_identifier_phrase: "sks"         # rare identifier; bound to Pepper during training
+subject_identifier_phrase: "sks"         # rare identifier which is bound to Pepper during training
 class_noun: "dog"                        # coarser class the prior should preserve
 
 # Data
@@ -14,6 +15,7 @@ class_prior_images_directory: "data/class_prior_dog"
 number_of_class_prior_images: 100        # auto-generated on first run if missing
 target_resolution: 512
 dataset_repeat_count: 1
+# After experimentation, I opted to not use BLIP captions in prompts
 use_blip_captions_in_prompts: false      # set true to concat BLIP caption onto prompt
 
 # Output
@@ -24,23 +26,23 @@ checkpoint_every_n_steps: 250
 log_every_n_steps: 10
 preview_every_n_steps: 250              # set to 0 to disable preview image generation
 preview_prompt_template: "a photo of {subject} sitting on a couch"
-preview_num_inference_steps: 25         # lower than final eval to keep training previews cheap
+preview_num_inference_steps: 25         # lower than final evaluation steps to keep training previews computationally cheap
 preview_guidance_scale: 7.5
 preview_seed: 0
 
-# Optimization  (tuned for A100 40 GB — ample VRAM, no memory compromises needed)
-train_batch_size: 2                      # A100 handles bs=2 easily; more stable gradients
+# Optimization (tuned for A100 40 GB VRAM)
+train_batch_size: 2                      # A100 handles bs=2 easily, more stable gradients
 gradient_accumulation_steps: 1           # no accumulation needed at bs=2 on A100
-total_training_steps: 1200              # 1200 actual optimizer steps; matches paper recommendation
+total_training_steps: 1200              # 1200 actual optimizer steps
 learning_rate: 2.0e-6                    # low LR because full UNet is updated
-prior_loss_weight: 0.5                   # was 1.0; reduced so subject signal dominates prior
+prior_loss_weight: 0.5                   # was 1.0, reduced so subject signal dominates prior, otherwise dog pics are too generic
 max_gradient_norm: 1.0
 
 # What to unfreeze
-train_text_encoder: true                 # A100 VRAM makes this free; sharpens identity binding
+train_text_encoder: true                 # Sharpens identity binding
 
 # Engine
-enable_gradient_checkpointing: false     # not needed on A100; disabling speeds up training
+enable_gradient_checkpointing: false     # not needed on A100, disabling speeds up training
 use_mixed_precision_float16: true
 num_workers: 0
 random_seed: 42

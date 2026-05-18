@@ -23,8 +23,8 @@ from torch.utils.data import Dataset
 from torchvision import transforms
 
 
-# Default prompt templates (adapted from the Textual Inversion paper). One is
-# picked at random each step so the learned embedding generalizes.
+# Default prompt templates (adapted from the Textual Inversion paper)
+# One is picked at random each step so the learned embedding generalizes
 DEFAULT_TEXTUAL_INVERSION_PROMPT_TEMPLATES: Sequence[str] = (
     "a photo of a {token}",
     "a rendering of a {token}",
@@ -51,7 +51,7 @@ def build_image_to_tensor_transform(
     target_resolution: int,
     apply_random_horizontal_flip: bool,
 ) -> transforms.Compose:
-    """Image -> tensor in [-1, 1], as expected by the SD 1.5 VAE encoder."""
+    """Image to tensor in [-1, 1] transformation, as expected by the Stable Diffusion 1.5 VAE encoder."""
     transform_steps: List[Callable] = [
         transforms.Resize(
             target_resolution,
@@ -79,11 +79,7 @@ class DatasetSample:
     source_image_filename: str
 
 
-# --------------------------------------------------------------------------- #
-# Subject dataset (Pepper)
-# --------------------------------------------------------------------------- #
-
-
+# Dataset for subject (Pepper images)
 class PepperImageDataset(Dataset):
     """
     A small on-disk dataset of preprocessed Pepper photos.
@@ -153,11 +149,7 @@ class PepperImageDataset(Dataset):
         )
 
 
-# --------------------------------------------------------------------------- #
-# Prompt-builder factories
-# --------------------------------------------------------------------------- #
-
-
+# Prompt builder factories to build prompts for the subject dataset
 def make_textual_inversion_prompt_builder(
     placeholder_token_string: str,
     prompt_templates: Sequence[str] = DEFAULT_TEXTUAL_INVERSION_PROMPT_TEMPLATES,
@@ -185,8 +177,7 @@ def make_dreambooth_prompt_builder(
         "a photo of sks dog" (minimal)
     or, when a BLIP caption is available and we opt into it:
         "a photo of sks dog, <blip caption with mentions of 'dog' replaced>"
-
-    We keep it simple and predictable: default is "a photo of {subject_id} {class_noun}".
+   Keeps the prompt simple and predictable: default is "a photo of {subject_id} {class_noun}".
     """
 
     minimal_prompt = f"a photo of {subject_identifier_phrase} {class_noun}"
@@ -204,18 +195,14 @@ def make_dreambooth_prompt_builder(
     return build_prompt_for_sample
 
 
-# --------------------------------------------------------------------------- #
 # Class-prior dataset (DreamBooth only)
-# --------------------------------------------------------------------------- #
-
-
 class ClassPriorDataset(Dataset):
     """
-    Images + prompts for DreamBooth's prior-preservation loss.
+    Images and prompts for DreamBooth's prior-preservation loss.
 
     Prior images are typically generated from the same base model with a
     generic class prompt (e.g. ``a photo of a dog``) so the model doesn't
-    forget what a generic dog looks like while it learns Pepper.
+    forget what a generic dog looks like while it fits on Pepper's unique characteristics.
     """
 
     def __init__(
@@ -263,15 +250,11 @@ class ClassPriorDataset(Dataset):
         )
 
 
-# --------------------------------------------------------------------------- #
-# Collate
-# --------------------------------------------------------------------------- #
-
-
+# Collate function to stack image tensors and preserve prompts as a list
 def collate_dataset_samples_into_batch(
     batch_of_samples: Sequence[DatasetSample],
 ) -> Dict[str, torch.Tensor | List[str]]:
-    """Simple collate that stacks image tensors and preserves prompts as a list."""
+    """Simple collate function that stacks image tensors and preserves prompts as a list for the batch."""
     stacked_image_tensor = torch.stack(
         [single_sample.image_tensor for single_sample in batch_of_samples],
         dim=0,
